@@ -1,4 +1,4 @@
-import re
+import cv2
 import random
 import numpy as np
 import os.path
@@ -76,14 +76,16 @@ def gen_batch_function(train_dir, gt_dir, image_shape):
         background_color = np.array([255, 0, 0])
 
         random.shuffle(image_paths)
+        
         for batch_i in range(0, len(image_paths), batch_size):
             images = []
             gt_images = []
             for image_file in image_paths[batch_i:batch_i+batch_size]:
                 gt_image_file = gt_dir+os.path.basename(image_file)
-
-                image = scipy.misc.imresize(scipy.misc.imread(image_file), image_shape)
-                gt_image = scipy.misc.imresize(scipy.misc.imread(gt_image_file), image_shape)
+                
+                # Load image, convert it from bgr to rgb, resize it to chosen size
+                image = cv2.resize(cv2.cvtColor(cv2.imread(image_file), cv2.COLOR_BGR2RGB), image_shape[::-1])
+                gt_image = cv2.resize(cv2.cvtColor(cv2.imread(gt_image_file), cv2.COLOR_BGR2RGB), image_shape[::-1])
 
                 gt_bg = np.all(gt_image == background_color, axis=2)
                 gt_bg = gt_bg.reshape(*gt_bg.shape, 1)
@@ -107,7 +109,7 @@ def gen_test_output(sess, logits, keep_prob, image_pl, data_folder, image_shape)
     :param image_shape: Tuple - Shape of image
     :return: Output for for each test image
     """
-    for image_file in glob(os.path.join(data_folder, 'image_2', '*.png')):
+    for image_file in glob(os.path.join(data_folder,'*.png')):
         image = scipy.misc.imresize(scipy.misc.imread(image_file), image_shape)
 
         im_softmax = sess.run(
@@ -123,7 +125,7 @@ def gen_test_output(sess, logits, keep_prob, image_pl, data_folder, image_shape)
         yield os.path.basename(image_file), np.array(street_im)
 
 
-def save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image):
+def save_inference_samples(runs_dir, test_dir, sess, image_shape, logits, keep_prob, input_image):
     # Make folder for current run
     output_dir = os.path.join(runs_dir, str(time.time()))
     if os.path.exists(output_dir):
@@ -133,6 +135,6 @@ def save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_p
     # Run NN on test images and save them to HD
     print('Training Finished. Saving test images to: {}'.format(output_dir))
     image_outputs = gen_test_output(
-        sess, logits, keep_prob, input_image, os.path.join(data_dir, 'data_road/testing'), image_shape)
+        sess, logits, keep_prob, input_image, test_dir, image_shape)
     for name, image in image_outputs:
         scipy.misc.imsave(os.path.join(output_dir, name), image)
